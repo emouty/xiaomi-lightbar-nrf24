@@ -30,7 +30,7 @@ PASSWORD = args.password
 TOPIC = args.topic
 
 # Create Lightbar and MqttController instances
-lightbar = Lightbar(ce_pin=CE_PIN, csn_pin=CSN_PIN, remote_id=REMOTE_ID)
+lightbar = Lightbar.with_initialized_radio(ce_pin=CE_PIN, csn_pin=CSN_PIN, remote_id=REMOTE_ID)
 
 class MqttController:
     def __init__(self, broker, port, username, password, topic, lightbar):
@@ -47,6 +47,7 @@ class MqttController:
 
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
+
     def __enter__(self):
         return self
 

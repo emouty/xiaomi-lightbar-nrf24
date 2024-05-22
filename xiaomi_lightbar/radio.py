@@ -1,5 +1,7 @@
 import time
 import pyrf24
+from pyrf24 import RF24
+
 from . import baseband
 
 # https://nrf24.github.io/RF24/
@@ -10,26 +12,40 @@ def clamp(x: int):
     """Clamp value to [0, 15]"""
     return min(max(x, 0), 15)
 
+def init_rf24(ce_pin, csn_pin):
+    radio = pyrf24.RF24()
+    if not radio.begin(ce_pin, csn_pin):
+        raise OSError("nRF24L01 hardware is not responding")
+    radio.channel = 6  # 6, 15, 43, 68 (or +1) -> 2406 MHz, 2015 MHz, 2043 MHz, 2068 MHz
+    radio.pa_level = pyrf24.RF24_PA_LOW
+    radio.data_rate = pyrf24.RF24_2MBPS
+    radio.set_retries(0, 0)  # no repetitions, done manually in method send
+    radio.listen = False
+    radio.dynamic_payloads = False
+    radio.payload_size = 17
+    radio.open_tx_pipe(bytes(5 * [0x55]))  # Address, really sync sequence
+    radio.listen = False
+    return radio
 
 class Lightbar:
     """Implements a Xiaomi light bar controller with a nRF24L01 module"""
 
-    def __init__(self, ce_pin: int, csn_pin: int, remote_id: int):
-        self.radio = pyrf24.RF24()
-        if not self.radio.begin(ce_pin, csn_pin):
-            raise OSError("nRF24L01 hardware is not responding")
-        self.radio.channel = 6  # 6, 15, 43, 68 (or +1) -> 2406 MHz, 2015 MHz, 2043 MHz, 2068 MHz
-        self.radio.pa_level = pyrf24.RF24_PA_LOW
-        self.radio.data_rate = pyrf24.RF24_2MBPS
-        self.radio.set_retries(0, 0)  # no repetitions, done manually in method send
-        self.radio.listen = False
-        self.radio.dynamic_payloads = False
-        self.radio.payload_size = 17
-        self.radio.open_tx_pipe(bytes(5*[0x55]))  # Address, really sync sequence
+    def __init__(self, radio: RF24, remote_id: int):
+        self.radio = radio
         self.repetitions = 20
         self.delay_s = 0.01
         self.counter = 0
         self.id = remote_id  # Xiaomi remote id, 3-byte int (0x112233)
+
+    @classmethod
+    def with_radio(cls, ce_pin: int, csn_pin: int, remote_id: int):
+        instance = cls.__new__(cls)
+        instance.radio = init_rf24(ce_pin, csn_pin)
+        instance.repetitions = 20
+        instance.delay_s = 0.01
+        instance.counter = 0
+        instance.id = remote_id
+        return instance
 
     def send(self, code: int, counter: int = None):
         """Send a command to the Xiaomi light bar.

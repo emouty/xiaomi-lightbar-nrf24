@@ -62,7 +62,7 @@ Assuming that pins are `ce_pin=25` and `csn_pin=0` and the id of the remote is `
 long), start with
 ```python
 from xiaomi_lightbar import Lightbar
-bar = Lightbar(25, 0, 0xABCDEF)
+bar = Lightbar.with_radio(25, 0, 0xABCDEF)
 ```
 Then you can turn on or off:
 ```python
@@ -127,7 +127,7 @@ If you cannot/do not want to capture your remote id, you can reprogram the bar w
 
 We can do the same thing with the library. Choose an arbitrary id,
 ```python
-bar = Lightbar(25, 0, 0x111111)
+bar = Lightbar.with_radio(25, 0, 0x111111)
 ```
 unplug and plug the bar, and within 20 seconds run
 ```python
