@@ -9,7 +9,8 @@ setup(name='xiaomi_lightbar_nrf24',
       license='GPLv3',
       packages=['xiaomi_lightbar'],
       install_requires=[
-          'pyrf24',
-          'crc',
+            'pyrf24',
+            'crc',
+            'paho-mqtt',
       ],
       zip_safe=False)
