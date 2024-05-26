@@ -1,10 +1,12 @@
 import time
 from enum import Enum, auto
 from struct import unpack
+from typing import Type
 
 import crc
 import pyrf24
 from pyrf24 import RF24
+from pyrf24.rf24 import rf24_pa_dbm_e
 
 from . import baseband
 
@@ -20,23 +22,30 @@ def clamp(x: int):
 
 PREAMBLE = 0x533914DD1C493412  # 8 bytes
 
-def init_rf24(ce_pin, csn_pin):
-    radio = pyrf24.RF24()
-    if not radio.begin(ce_pin, csn_pin):
-        raise OSError("nRF24L01 hardware is not responding")
-    radio.channel = 6  # 6, 15, 43, 68 (or +1) -> 2406 MHz, 2015 MHz, 2043 MHz, 2068 MHz
-    radio.pa_level = pyrf24.RF24_PA_LOW
-    radio.data_rate = pyrf24.RF24_2MBPS
-    radio.set_retries(0, 0)  # no repetitions, done manually in method send
-    radio.listen = False
-    radio.dynamic_payloads = False
-    radio.payload_size = 17
-    radio.open_tx_pipe(bytes(5 * [0x55]))  # Address, really sync sequence
-    radio.listen = False
-    return radio
 
+def init_rf24_write(ce_pin: int, csn_pin: int):
+    wrapper = RF24Wrapper(ce_pin, csn_pin)
+    wrapper.radio.dynamic_payloads = False
+    wrapper.radio.payload_size = 17
+    wrapper.switch_mode(RF24Wrapper.MODE.WRITE)
+    return wrapper
+
+
+def init_rf24_read(ce_pin: int, csn_pin: int, channel: int, pa_level: rf24_pa_dbm_e):
+    wrapper = RF24Wrapper(ce_pin, csn_pin)
+    wrapper.radio.channel = channel
+    wrapper.radio.pa_level = pa_level
+    wrapper.radio.data_rate = pyrf24.RF24_2MBPS
+    wrapper.radio.dynamic_payloads = False
+    wrapper.radio.crc_length = pyrf24.RF24_CRC_DISABLED
+    wrapper.radio.payload_size = 12  # More than necessary, I will strip some bits
+    wrapper.radio.address_width = 5
+    wrapper.switch_mode(RF24Wrapper.MODE.WRITE)
+    return wrapper
 
 class RF24Wrapper:
+    PIPE_NUMBER = 1
+
     class ReceiverOccupiedError(Exception):
         pass
 
@@ -44,7 +53,7 @@ class RF24Wrapper:
         READ = auto()
         WRITE = auto()
 
-    def __init__(self, ce_pin: int, csn_pin: int, ):
+    def __init__(self, ce_pin: int, csn_pin: int):
         self.radio = pyrf24.RF24()
         if not self.radio.begin(ce_pin, csn_pin):
             raise OSError("nRF24L01 hardware is not responding")
@@ -57,9 +66,10 @@ class RF24Wrapper:
     def switch_mode(self, mode: MODE):
         if not self.tx_occurring:
             if mode == RF24Wrapper.MODE.READ:
-                self.radio.open_rx_pipe(1, PREAMBLE >> 24)  # 5 first bytes of preamble
+                self.radio.open_rx_pipe(RF24Wrapper.PIPE_NUMBER, PREAMBLE >> 24)  # 5 first bytes of preamble
                 self.radio.listen = True
             elif mode == RF24Wrapper.MODE.WRITE:
+                self.radio.close_rx_pipe(RF24Wrapper.PIPE_NUMBER)
                 self.radio.open_tx_pipe(bytes(5 * [0x55]))  # Address, really sync sequence
                 self.radio.listen = False
         else:
@@ -81,12 +91,30 @@ class RF24Wrapper:
                     else:
                         print("Fallback: Could not switch to write mode after multiple attempts")
 
+    def write(self, packet):
+        if self.radio.listen:
+            self.try_switch_mode(RF24Wrapper.MODE.WRITE)
+        self.tx_occurring = True
+        self.radio.write(packet)
+        self.tx_occurring = False
+
+    def read(self):
+        if not self.radio.listen:
+            self.try_switch_mode(RF24Wrapper.MODE.WRITE)
+        has_payload, pipe_number = self.radio.available_pipe()
+        if has_payload:
+            self.tx_occurring = True
+            packet = self.radio.read(self.radio.payload_size)
+            self.tx_occurring = False
+            return packet
+        else:
+            return bytearray()
 
 class Lightbar:
     """Implements a Xiaomi light bar controller with a nRF24L01 module"""
 
-    def __init__(self, radio: RF24, remote_id: int):
-        self.radio = radio
+    def __init__(self, radio_wrapper: RF24Wrapper, remote_id: int):
+        self.wrapper = radio_wrapper
         self.repetitions = 20
         self.delay_s = 0.01
         self.counter = 0
@@ -95,7 +123,7 @@ class Lightbar:
     @classmethod
     def with_radio(cls, ce_pin: int, csn_pin: int, remote_id: int):
         instance = cls.__new__(cls)
-        instance.radio = init_rf24(ce_pin, csn_pin)
+        instance.wrapper = init_rf24_write(ce_pin, csn_pin)
         instance.repetitions = 20
         instance.delay_s = 0.01
         instance.counter = 0
@@ -117,12 +145,12 @@ class Lightbar:
                 self.counter = 0
         pkt = baseband.packet(self.id, code, counter)
         for _ in range(self.repetitions):
-            self.radio.write(pkt)
+            self.wrapper.write(pkt)
             time.sleep(self.delay_s)
 
     @property
     def is_available(self):
-        return self.radio.is_chip_connected
+        return self.wrapper.radio.is_chip_connected
 
     def on_off(self, counter: int = None):
         self.send(0x0100, counter)
@@ -196,9 +224,10 @@ def decode_packet(raw: bytes):
 
 
 class Remote:
+    PREAMBLE = 0x533914DD1C493412  # 8 bytes
 
-    def __init__(self, radio: RF24):
-        self.radio = radio
+    def __init__(self, wrapper: RF24Wrapper):
+        self.wrapper = wrapper
         crc16_config = crc.Configuration(
             width=16,
             polynomial=0x1021,
@@ -228,9 +257,16 @@ class Remote:
             print(f"• {k}: {hex(v)}")
 
     def read_and_print(self):
-        has_payload, pipe_number = self.radio.available_pipe()
-        if has_payload:
-            received = self.radio.read(self.radio.payload_size)
-            packet = decode_packet(received)
-            print()
-            self.print_packet(packet)
+        received = self.wrapper.read()
+        if len(bytearray()) == 0:
+            return
+        packet = decode_packet(received)
+        print()
+        self.print_packet(packet)
+
+    def read(self, handler):
+        received = self.wrapper.read()
+        if len(bytearray()) == 0:
+            return
+        packet = decode_packet(received)
+        return handler(packet)
