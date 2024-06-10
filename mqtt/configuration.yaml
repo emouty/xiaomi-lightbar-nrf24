@@ -1,12 +1,15 @@
 mqtt:
   - light:
       - name: "Xiaomi Lightbar"
+        state_topic: "xiaomi/lightbar/state"
         command_topic: "xiaomi/lightbar/control"
         payload_on: "ON"
         payload_off: "OFF"
         max_mireds: 370
         min_mireds: 153
+        brightness_state_topic: "xiaomi/lightbar/brightness/state"
         brightness_command_topic: "xiaomi/lightbar/brightness/set"
+        color_temp_state_topic: "xiaomi/lightbar/temperature/state"
         color_temp_command_topic: "xiaomi/lightbar/temperature/set"
         brightness_value_template: "{{ value_json.brightness }}"
         color_temp_value_template: "{{ value_json.temp }}"

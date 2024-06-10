@@ -43,7 +43,7 @@ async def validate_input(hass: HomeAssistant,
 
     if ce_pin >= 0:  # ce_pin<0: debugging
         try:
-            Lightbar(ce_pin, cs_pin, device_id)
+            Lightbar.with_radio(ce_pin, cs_pin, device_id)
         except RuntimeError:
             raise CannotConnect
 

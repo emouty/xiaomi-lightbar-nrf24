@@ -16,9 +16,9 @@ else:
 
 ID = int(os.getenv("LIGHTBAR_ID"), 0)
 
-lightbar = Lightbar(25, 0, ID)
-lightbar.radio.print_pretty_details()
+lightbar = Lightbar.with_radio(25, 0, ID)
+lightbar.wrapper.print_pretty_details()
 
-lightbar.on_off();
+lightbar.on_off()
 time.sleep(1)
 lightbar.send(0x0100)
