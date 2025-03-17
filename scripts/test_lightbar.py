@@ -30,10 +30,10 @@ elif args.power == "MAX":
 CHANNEL = args.channel
 ID = args.id
 
-bar = Lightbar(25, 0, ID)
-bar.radio.channel = CHANNEL
-bar.radio.pa_level = POW
-bar.radio.print_details()
+bar = Lightbar.with_radio(25, 0, ID)
+bar.wrapper.radio.channel = CHANNEL
+bar.wrapper.radio.pa_level = POW
+bar.wrapper.radio.print_details()
 print(f"CHANNEL         = {CHANNEL}")
 
 print("Testing warmer")

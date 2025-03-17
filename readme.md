@@ -37,15 +37,14 @@ See [here](https://nrf24.github.io/RF24/md_docs_rpi_general.html) for the gory d
 
 ## Dependencies
 
-- `pyrf24` [RF24 python library](https://nrf24.github.io/RF24)
+- `pyrf24` [pyRF24 python library](https://nrf24.github.io/pyRF24)
 - `crc` [CRC python library](https://github.com/Nicoretti/crc)
 
-Notice that `pyrf24` may need to build some dynamic libraries. So, you will need some additional
-packages:
+Notice that `pyrf24` may need to build from source on some systems. In such case, you will need cmake and python headers (python3-dev) installed.
 
 - Debian based OS (e.g. Raspberry Pi OS)
 ```sh
-  sudo apt-get install python3-dev libboost-python-dev
+  sudo apt-get install python3-dev cmake
   python -m pip install pyrf24
 
 ```
@@ -62,7 +61,7 @@ Assuming that pins are `ce_pin=25` and `csn_pin=0` and the id of the remote is `
 long), start with
 ```python
 from xiaomi_lightbar import Lightbar
-bar = Lightbar(25, 0, 0xABCDEF)
+bar = Lightbar.with_radio(25, 0, 0xABCDEF)
 ```
 Then you can turn on or off:
 ```python
@@ -127,7 +126,7 @@ If you cannot/do not want to capture your remote id, you can reprogram the bar w
 
 We can do the same thing with the library. Choose an arbitrary id,
 ```python
-bar = Lightbar(25, 0, 0x111111)
+bar = Lightbar.with_radio(25, 0, 0x111111)
 ```
 unplug and plug the bar, and within 20 seconds run
 ```python
