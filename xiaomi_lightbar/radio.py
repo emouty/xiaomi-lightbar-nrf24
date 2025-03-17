@@ -1,14 +1,19 @@
 import time
 from enum import Enum, auto
 from struct import unpack
-from typing import Type
 
 import crc
 import pyrf24
-from pyrf24 import RF24
 from pyrf24.rf24 import rf24_pa_dbm_e
 
 from . import baseband
+
+CODE_ON_OFF = 0x0100
+CODE_MIN_COOLER = 0x0200
+CODE_MIN_WARMER = 0x0300
+CODE_MIN_HIGHER = 0x0400
+CODE_MIN_LOWER = 0x0500
+CODE_RESET = 0x0600
 
 
 # https://nrf24.github.io/RF24/
@@ -42,6 +47,7 @@ def init_rf24_read(ce_pin: int, csn_pin: int, channel: int, pa_level: rf24_pa_db
     wrapper.radio.address_width = 5
     wrapper.switch_mode(RF24Wrapper.MODE.WRITE)
     return wrapper
+
 
 class RF24Wrapper:
     PIPE_NUMBER = 1
@@ -100,7 +106,7 @@ class RF24Wrapper:
 
     def read(self):
         if not self.radio.listen:
-            self.try_switch_mode(RF24Wrapper.MODE.WRITE)
+            self.try_switch_mode(RF24Wrapper.MODE.READ)
         has_payload, pipe_number = self.radio.available_pipe()
         if has_payload:
             self.tx_occurring = True
@@ -109,6 +115,7 @@ class RF24Wrapper:
             return packet
         else:
             return bytearray()
+
 
 class Lightbar:
     """Implements a Xiaomi light bar controller with a nRF24L01 module"""
@@ -153,22 +160,22 @@ class Lightbar:
         return self.wrapper.radio.is_chip_connected
 
     def on_off(self, counter: int = None):
-        self.send(0x0100, counter)
+        self.send(CODE_ON_OFF, counter)
 
     def reset(self, counter: int = None):
-        self.send(0x0600, counter)
+        self.send(CODE_RESET, counter)
 
     def cooler(self, step: int = 1, counter: int = None):
-        self.send(0x0200 + clamp(step), counter)
+        self.send(CODE_MIN_COOLER + clamp(step), counter)
 
     def warmer(self, step: int = 1, counter: int = None):
-        self.send(0x0300 - clamp(step), counter)
+        self.send(CODE_MIN_WARMER - clamp(step), counter)
 
     def higher(self, step: int = 1, counter: int = None):
-        self.send(0x0400 + clamp(step), counter)
+        self.send(CODE_MIN_HIGHER + clamp(step), counter)
 
     def lower(self, step: int = 1, counter: int = None):
-        self.send(0x0500 - clamp(step), counter)
+        self.send(CODE_MIN_LOWER - clamp(step), counter)
 
     def brightness(self, value: int, counter: int = None):
         """Set the brightness (≤0 lowest, ≥15 highest 270 lm)"""
@@ -270,3 +277,20 @@ class Remote:
             return
         packet = decode_packet(received)
         return handler(packet)
+
+    def handle_command(self, packet):
+        command = packet['command']
+        if command == CODE_ON_OFF:
+            print("Received command: ON/OFF")
+        elif command == CODE_RESET:
+            print("Received command: RESET")
+        elif CODE_MIN_COOLER <= command <= CODE_MIN_COOLER + 0xFF:
+            print("Received command: COOLER")
+        elif CODE_MIN_WARMER <= command <= CODE_MIN_WARMER + 0xFF:
+            print("Received command: WARMER")
+        elif CODE_MIN_HIGHER <= command <= CODE_MIN_HIGHER + 0xFF:
+            print("Received command: HIGHER")
+        elif CODE_MIN_LOWER <= command <= CODE_MIN_LOWER + 0xFF:
+            print("Received command: LOWER")
+        else:
+            print("Unknown command")

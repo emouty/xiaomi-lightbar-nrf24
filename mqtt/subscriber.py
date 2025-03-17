@@ -99,3 +99,16 @@ def scale_value(t):
         f_t = None
     return round(f_t) if f_t is not None else None
 
+
+def reverse_scale_value(f_t):
+    if 7 <= f_t <= 15:
+        c1, d1 = 15, 7
+        a1, b1 = 153, 219
+        t = a1 + ((f_t - c1) * (b1 - a1)) / (d1 - c1)
+    elif 0 <= f_t < 7:
+        c2, d2 = 7, 0
+        a2, b2 = 219, 370
+        t = a2 + ((f_t - c2) * (b2 - a2)) / (d2 - c2)
+    else:
+        t = None
+    return round(t) if t is not None else None

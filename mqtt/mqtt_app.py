@@ -3,8 +3,9 @@ import paho.mqtt.client as mqtt
 from mqtt.subscriber import MqttController
 from xiaomi_lightbar import Lightbar
 import argparse
+import time
 
-from xiaomi_lightbar.radio import RF24Wrapper
+from xiaomi_lightbar.radio import RF24Wrapper, Remote
 
 description = """
     MQTT subscriber for Xiaomi Lightbar Home Assistant MQTT Light integration.
@@ -39,9 +40,12 @@ def main():
         radio_wrapper = RF24Wrapper(ce_pin=CE_PIN, csn_pin=CSN_PIN)
         # Create Lightbar and MqttController instances
         lightbar = Lightbar(radio_wrapper=radio_wrapper.radio, remote_id=REMOTE_ID)
+        remote = Remote(radio_wrapper)
         with MqttController(BROKER, PORT, USERNAME, PASSWORD, TOPIC, lightbar) as controller:
             controller.start()
             while True:  # Keep the program running
+                remote.read(remote.handle_command)
+                time.sleep(0.1)
                 pass
     except KeyboardInterrupt:
         print("\nInterrupted by user. Exiting...")
